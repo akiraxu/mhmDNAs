@@ -2,13 +2,17 @@ var parser = require("csv-parse/sync");
 var stringifier = require("csv-stringify/sync");
 var fs = require("fs");
 
-if(process.argv.length < 5){
-	console.log("Usage: node run [cM] [file1] [file2] [file3] ...")
+if(process.argv.length < 7){
+	console.log("Usage: node run [cM] [SNPs] [prefix] [file1] [file2] [file3] ...")
+	console.log("E.g.: node run 2.5 50 output-2020 aaa.csv bbb.csv ccc.csv")
 	process.exit(1);
 }
-var files = process.argv.slice(3);
+var files = process.argv.slice(5);
 var cM_threshold = parseFloat(process.argv[2]);
+var minimum_snps = parseInt(process.argv[3]);
+var output_prefix = process.argv[4];
 var file_content = [];
+var timestamp = (new Date()).toISOString();
 
 //ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/
 var cM = {};
@@ -35,7 +39,7 @@ for(let i = 0; i < files.length; i++){
 	for(let j = i + 1; j < files.length; j++){
 		console.log("Processing " + files[i] + " ∩ " + files[j]);
 		let result = mergeIntersection(file_content[i], file_content[j]);
-		summary.push({source: files[i] + " ∩ " + files[j], summary: result.summary});
+		summary.push({args: process.argv, source: files[i] + " ∩ " + files[j], summary: result.summary});
 		Object.assign(data, result.data);
 		Object.assign(backbonedData, result.data);
 		overlappedData = overlappedData.concat(Object.values(result.data));
@@ -51,10 +55,10 @@ let arr2 = Object.values(backbonedData).sort((a, b) => {
 	return a.CHROMOSOME == b.CHROMOSOME ? a.POSITION - b.POSITION : a.CHROMOSOME - b.CHROMOSOME;
 });
 
-fs.writeFileSync("hybrid-output.csv", stringifier.stringify(arr, {header: true}));
-fs.writeFileSync("backboned-hybrid-output.csv", stringifier.stringify(arr2, {header: true}));
-fs.writeFileSync("overlapped-hybrid-output.csv", stringifier.stringify(overlappedData, {header: true}));
-fs.writeFileSync("summary.json", JSON.stringify(summary, null, 2));
+fs.writeFileSync(output_prefix + "-hybrid-output-" + timestamp + ".csv", stringifier.stringify(arr, {header: true}));
+fs.writeFileSync(output_prefix + "-backboned-hybrid-output-" + timestamp + ".csv", stringifier.stringify(arr2, {header: true}));
+fs.writeFileSync(output_prefix + "-overlapped-hybrid-output-" + timestamp + ".csv", stringifier.stringify(overlappedData, {header: true}));
+fs.writeFileSync(output_prefix + "-summary-" + timestamp + ".json", JSON.stringify(summary, null, 2));
 
 
 
@@ -169,7 +173,7 @@ function mergeIntersection(a, b){
 	let table = genMatchResult(res);
 	let toCM = [];
 	table.forEach((item) => {
-		if(item.cm > cM_threshold){
+		if(item.cm >= cM_threshold && item.snp >= minimum_snps){
 			toCM.push(item);
 		}
 	})
