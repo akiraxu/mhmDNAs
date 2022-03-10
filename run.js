@@ -43,7 +43,7 @@ function searchGRCh34Pos(chr, pos, i = -1, j = -2){
 	if(i == -1){
 		return searchGRCh34Pos(chr, pos, 0, cM[chr].length);
 	}else if(i == j){
-		return i;
+		return i == cM[chr].length ? cM[chr].length - 1 : i;
 	}else{
 		let mid = Math.floor((j - i) / 2) + i;
 		let value = parseFloat(cM[chr][mid]['Position(bp)']);
@@ -58,7 +58,7 @@ function searchGRCh34Pos(chr, pos, i = -1, j = -2){
 }
 
 function calculateCM(chr, startPos, endPos){
-	return parseFloat(cM[chr][searchGRCh34Pos(chr, endPos)]['Map(cM)']) - parseFloat(cM[chr][searchGRCh34Pos(chr, startPos)]['Map(cM)'])
+	return parseFloat(cM[chr][searchGRCh34Pos(chr, endPos)]['Map(cM)']) - parseFloat(cM[chr][searchGRCh34Pos(chr, startPos)]['Map(cM)']);;
 }
 
 function calcCM(obj){
