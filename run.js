@@ -12,6 +12,7 @@ var file_content = [];
 
 //ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/
 var cM = {};
+console.log("Loading HapMap II GRCh37");
 for(let i = 1; i <= 22; i++){
 	cM[i] = parser.parse(fs.readFileSync('genetic_map_HapMapII_GRCh37/genetic_map_GRCh37_chr' + i + '.txt').toString(), {columns: true, skip_empty_lines: true, delimiter: "\t"})
 }
@@ -21,20 +22,31 @@ for(let i = 0; i < files.length; i++){
 }
 
 let data = {};
+let backbonedData = {};
+let overlappedData = [];
 let summary = [];
+
+file_content[0].table.forEach((item) => {
+	backbonedData[item.RSID] = item;
+});
 
 for(let i = 0; i < files.length; i++){
 	for(let j = i + 1; j < files.length; j++){
+		console.log("Processing " + files[i] + " ∩ " + files[j]);
 		let result = mergeIntersection(file_content[i], file_content[j]);
 		summary.push({source: files[i] + " ∩ " + files[j], summary: result.summary});
 		Object.assign(data, result.data);
+		Object.assign(backbonedData, result.data);
+		overlappedData.concat(Object.values(result.data));
 	}
 }
 let arr = Object.values(data).sort((a, b) => {
-	return a.chromosome == b.chromosome ? a.pos - b.pos : a.chromosome - b.chromosome;
+	return a.CHROMOSOME == b.CHROMOSOME ? a.POSITION - b.POSITION : a.CHROMOSOME - b.CHROMOSOME;
 });
 
-fs.writeFileSync("result.csv", stringifier.stringify(arr, {header: true}));
+fs.writeFileSync("hybrid-output.csv", stringifier.stringify(arr, {header: true}));
+fs.writeFileSync("backboned-hybrid-output.csv", stringifier.stringify(backbonedData, {header: true}));
+fs.writeFileSync("overlapped-hybrid-output.csv", stringifier.stringify(overlappedData, {header: true}));
 fs.writeFileSync("summary.json", JSON.stringify(summary, null, 2));
 
 
@@ -72,7 +84,9 @@ function readRawGene(fn){
 	obj.table = table;
 	obj.rsidmap = {};
 	table.forEach((item) => {
-		obj.rsidmap[item.RSID] = {rsid: item.RSID, chromosome: parseInt(item.CHROMOSOME), pos: parseInt(item.POSITION), result: item.RESULT};
+		if(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"].indexOf(item.CHROMOSOME) > -1){
+			obj.rsidmap[item.RSID] = {rsid: item.RSID, chromosome: parseInt(item.CHROMOSOME), pos: parseInt(item.POSITION), result: item.RESULT};
+		}
 	});
 	return obj;
 }
@@ -139,7 +153,9 @@ function genMatchResult(obj){
 }
 
 function mergeIntersection(a, b){
+	console.log("Compare");
 	let res = compare(a, b);
+	console.log("Matching");
 	let table = genMatchResult(res);
 	let toCM = [];
 	table.forEach((item) => {
@@ -148,12 +164,14 @@ function mergeIntersection(a, b){
 		}
 	})
 	let result = {};
+	console.log("Extracting");
 	toCM.forEach((range) => {
 		Object.values(a.rsidmap).forEach((aSNP) => {
 			if(aSNP.chromosome == range.chr && aSNP.pos >= range.start && aSNP.pos <= range.end){
-				result[aSNP.rsid] = {rsid: aSNP.rsid, chromosome: aSNP.chromosome, pos: aSNP.pos, result: aSNP.result};
+				result[aSNP.rsid] = {RSID: aSNP.rsid, CHROMOSOME: aSNP.chromosome.toString(), POSITION: aSNP.pos.toString(), RESULT: aSNP.result};
 			}
 		});
 	});
+	console.log("Done");
 	return {summary: toCM, data: result};
 }
