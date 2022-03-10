@@ -25,7 +25,7 @@ let summary = [];
 
 for(let i = 0; i < files.length; i++){
 	for(let j = i + 1; j < files.length; j++){
-		let result = mergeIntersection(file_content[i], file_content[i]);
+		let result = mergeIntersection(file_content[i], file_content[j]);
 		summary.push({source: files[i] + " ∩ " + files[j], summary: result.summary});
 		Object.assign(data, result.data);
 	}
