@@ -17,6 +17,7 @@ for(let i = 1; i <= 22; i++){
 	cM[i] = parser.parse(fs.readFileSync('genetic_map_HapMapII_GRCh37/genetic_map_GRCh37_chr' + i + '.txt').toString(), {columns: true, skip_empty_lines: true, delimiter: "\t"})
 }
 
+console.log("Loading Input Files");
 for(let i = 0; i < files.length; i++){
 	file_content.push(readRawGene(files[i]));
 }
@@ -37,15 +38,21 @@ for(let i = 0; i < files.length; i++){
 		summary.push({source: files[i] + " ∩ " + files[j], summary: result.summary});
 		Object.assign(data, result.data);
 		Object.assign(backbonedData, result.data);
-		overlappedData.concat(Object.values(result.data));
+		overlappedData = overlappedData.concat(Object.values(result.data));
 	}
 }
+
+console.log("Packing Final Result");
+
 let arr = Object.values(data).sort((a, b) => {
+	return a.CHROMOSOME == b.CHROMOSOME ? a.POSITION - b.POSITION : a.CHROMOSOME - b.CHROMOSOME;
+});
+let arr2 = Object.values(backbonedData).sort((a, b) => {
 	return a.CHROMOSOME == b.CHROMOSOME ? a.POSITION - b.POSITION : a.CHROMOSOME - b.CHROMOSOME;
 });
 
 fs.writeFileSync("hybrid-output.csv", stringifier.stringify(arr, {header: true}));
-fs.writeFileSync("backboned-hybrid-output.csv", stringifier.stringify(backbonedData, {header: true}));
+fs.writeFileSync("backboned-hybrid-output.csv", stringifier.stringify(arr2, {header: true}));
 fs.writeFileSync("overlapped-hybrid-output.csv", stringifier.stringify(overlappedData, {header: true}));
 fs.writeFileSync("summary.json", JSON.stringify(summary, null, 2));
 
@@ -88,6 +95,9 @@ function readRawGene(fn){
 			obj.rsidmap[item.RSID] = {rsid: item.RSID, chromosome: parseInt(item.CHROMOSOME), pos: parseInt(item.POSITION), result: item.RESULT};
 		}
 	});
+	obj.arr = Object.values(obj.rsidmap).sort((a, b) => {
+		return a.chromosome == b.chromosome ? a.pos - b.pos : a.chromosome - b.chromosome;
+	})
 	return obj;
 }
 
@@ -165,13 +175,30 @@ function mergeIntersection(a, b){
 	})
 	let result = {};
 	console.log("Extracting");
+	let cursor = 0;
 	toCM.forEach((range) => {
+		let flag = false;
+		while(cursor < a.arr.length){
+			aSNP = a.arr[cursor];
+			if(aSNP.chromosome == range.chr && aSNP.pos >= range.start && aSNP.pos <= range.end){
+				result[aSNP.rsid] = {RSID: aSNP.rsid, CHROMOSOME: aSNP.chromosome.toString(), POSITION: aSNP.pos.toString(), RESULT: aSNP.result};
+				flag = true;
+			}else{
+				if(flag){
+					break;
+				}
+			}
+			cursor++;
+		}
+		
+	});
+	/*toCM.forEach((range) => {
 		Object.values(a.rsidmap).forEach((aSNP) => {
 			if(aSNP.chromosome == range.chr && aSNP.pos >= range.start && aSNP.pos <= range.end){
 				result[aSNP.rsid] = {RSID: aSNP.rsid, CHROMOSOME: aSNP.chromosome.toString(), POSITION: aSNP.pos.toString(), RESULT: aSNP.result};
 			}
 		});
-	});
+	});*/
 	console.log("Done");
 	return {summary: toCM, data: result};
 }
