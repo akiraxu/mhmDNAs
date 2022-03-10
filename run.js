@@ -13,7 +13,7 @@ var file_content = [];
 //ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/
 var cM = {};
 for(let i = 1; i <= 22; i++){
-	cM[i] = parser.parse(fs.readFileSync('genetic_map_GRCh37_chr1.txt').toString(), {columns: true, skip_empty_lines: true, delimiter: "\t"})
+	cM[i] = parser.parse(fs.readFileSync('genetic_map_HapMapII_GRCh37/genetic_map_GRCh37_chr1.txt').toString(), {columns: true, skip_empty_lines: true, delimiter: "\t"})
 }
 
 for(let i = 0; i < files.length; i++){
