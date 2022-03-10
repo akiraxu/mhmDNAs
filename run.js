@@ -12,7 +12,7 @@ var cM_threshold = parseFloat(process.argv[2]);
 var minimum_snps = parseInt(process.argv[3]);
 var output_prefix = process.argv[4];
 var file_content = [];
-var timestamp = (new Date()).toISOString();
+var timestamp = Date.now();
 
 //ftp://ftp.ncbi.nlm.nih.gov/hapmap/recombination/2011-01_phaseII_B37/
 var cM = {};
