@@ -9,7 +9,7 @@ var formOpt = {uploadDir: `${__dirname}/uploads`, maxFileSize: 200 * 1024 * 1024
 
 var db = JSON.parse(fs.readFileSync('db.json', {encoding: "utf8"}));
 
-http.createServer(server).listen(8081);
+http.createServer(server).listen(8080);
 
 function server(req, res) {
 	if(req.method == 'POST'){
@@ -28,15 +28,18 @@ function server(req, res) {
 			}
 			let file_arr = Array.isArray(files.filetoupload) ? files.filetoupload : [files.filetoupload];
 			let file_path_arr = [];
+			let file_orig_name_arr = [];
 			file_arr.forEach((aFile) => {
 				file_path_arr.push(aFile.filepath);
+				file_orig_name_arr.push(aFile.originalFilename);
 			});
 			let obj = {
 				id: crypto.randomBytes(16).toString('hex'),
 				isDone: false,
 				mincm: fields.mincm,
 				minsnp: fields.minsnp,
-				files: file_path_arr
+				files: file_path_arr,
+				origfn: file_orig_name_arr
 			};
 			db[obj.id] = obj;
 			let child = child_process.fork("run.js");
@@ -49,10 +52,40 @@ function server(req, res) {
 			child.on("close", function(rc){
 				console.log("child end");
 			});
-			res.writeHead(200, {'Content-Type': 'text/plain'});
-			res.write(JSON.stringify(obj, null, 2));
+			res.writeHead(302, {'Location': '/' + obj.id});
 			res.end();
 		});
+	}else if(req.method == 'GET' && req.url !='/'){
+		let token = (/^\/([a-z0-9]{32})/).exec(req.url);
+		console.log(req.url);
+		if(token){
+			let fn = (/^\/([a-z0-9]{32}-[a-z0-9-]+\.(csv|json))/).exec(req.url);
+			if(fn){
+				if(fs.existsSync(fn[1])){
+					res.writeHead(200, {
+						'Content-Type': 'application/octet-stream',
+						'Content-Disposition': 'attachment;filename="' + fn[1] + '"'
+					});
+					res.write(fs.readFileSync(fn[1]));
+					res.end();
+				}else{
+					res.writeHead(404, {'Content-Type': 'text/html'});
+					res.end();
+				}
+			}else{
+				let results = fs.readdirSync("./").filter(fn => fn.includes(token[1]));
+				let html = "<h1>Below are the results, if not shown, bookmark this page and check later</h1></br>";
+				results.forEach((item) => {
+					html += '<a href="/' + item + '">' + item + '</a></br>';
+				});
+				res.writeHead(200, {'Content-Type': 'text/html'});
+				res.write(html);
+				res.end();
+			}
+		}else{
+			res.writeHead(404, {'Content-Type': 'text/html'});
+			res.end();
+		}
 	}else{
 	res.writeHead(200, {'Content-Type': 'text/html'});
 	res.write(fs.readFileSync('index.html'));
