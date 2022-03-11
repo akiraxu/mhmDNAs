@@ -4,12 +4,34 @@ var crypto = require("crypto");
 var child_process = require("child_process");
 var formidable = require('formidable');
 var http = require('http');
+var MUTEX_LOCK = false; 
 
-var formOpt = {uploadDir: `${__dirname}/uploads`, maxFileSize: 200 * 1024 * 1024, multiples:true};
+var formOpt = {uploadDir: `${__dirname}/uploads`, maxFileSize: 1024 * 1024 * 1024, multiples:true};
 
 var db = JSON.parse(fs.readFileSync('db.json', {encoding: "utf8"}));
 
 http.createServer(server).listen(8080);
+
+function queueJob(obj){
+	if(!MUTEX_LOCK){
+		MUTEX_LOCK = true;
+		obj.status = "running";
+		let child = child_process.fork("run.js");
+		child.send(obj);
+		child.on("message", function(rc){
+			console.log("child finish");
+			db[obj.id].isDone = true;
+			fs.writeFileSync("db.json", JSON.stringify(db, null, 2));
+		});
+		child.on("close", function(rc){
+			console.log("child end");
+			MUTEX_LOCK = false;
+			obj.status = "done";
+		});
+	}else{
+		setTimeout(()=>{queueJob(obj);}, 500);
+	}
+};
 
 function server(req, res) {
 	if(req.method == 'POST'){
@@ -21,37 +43,41 @@ function server(req, res) {
 				res.end("Something wrong");
 				return;
 			}
-			if(!files.filetoupload){
+			if(!files.filetoupload0){
 				res.writeHead(400, { 'Content-Type': 'text/plain' });
 				res.end("Something wrong");
 				return;
 			}
-			let file_arr = Array.isArray(files.filetoupload) ? files.filetoupload : [files.filetoupload];
+			
 			let file_path_arr = [];
 			let file_orig_name_arr = [];
-			file_arr.forEach((aFile) => {
-				file_path_arr.push(aFile.filepath);
-				file_orig_name_arr.push(aFile.originalFilename);
-			});
+			let file_group = [];
+			
+			let i = 0;
+			while(files['filetoupload' + i]){
+				let file_arr = Array.isArray(files['filetoupload' + i]) ? files['filetoupload' + i] : [files['filetoupload' + i]];
+				file_arr.forEach((aFile) => {
+					if(aFile.size > 0){
+						file_path_arr.push(aFile.filepath);
+						file_orig_name_arr.push(aFile.originalFilename);
+						file_group.push(i);
+					}
+				});
+				i++;
+			}
+			
 			let obj = {
 				id: crypto.randomBytes(16).toString('hex'),
 				isDone: false,
 				mincm: fields.mincm,
 				minsnp: fields.minsnp,
 				files: file_path_arr,
-				origfn: file_orig_name_arr
+				origfn: file_orig_name_arr,
+				group: file_group,
+				status: "queued"
 			};
 			db[obj.id] = obj;
-			let child = child_process.fork("run.js");
-			child.send(obj);
-			child.on("message", function(rc){
-				console.log("child finish");
-				db[obj.id].isDone = true;
-				fs.writeFileSync("db.json", JSON.stringify(db, null, 2));
-			});
-			child.on("close", function(rc){
-				console.log("child end");
-			});
+			queueJob(obj);
 			res.writeHead(302, {'Location': '/' + obj.id});
 			res.end();
 		});
@@ -74,7 +100,8 @@ function server(req, res) {
 				}
 			}else{
 				let results = fs.readdirSync("./").filter(fn => fn.includes(token[1]));
-				let html = "<h1>Below are the results, if not shown, bookmark this page and check later</h1></br>";
+				let html = "<h1>Job " + token[1] + " status : " + (db[token[1]] ? db[token[1]].status : "invalid") + "</h1></br>";
+				html += "<h1>Below are the results, if not shown, bookmark this page and check later</h1></br>";
 				results.forEach((item) => {
 					html += '<a href="/' + item + '">' + item + '</a></br>';
 				});

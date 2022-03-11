@@ -28,7 +28,7 @@ for(let i = 1; i <= 22; i++){
 
 class MhmDNAs {
 
-	constructor(cm, file_path_arr, cm_str, snp_str, prefix, ofn = null){
+	constructor(cm, file_path_arr, cm_str, snp_str, prefix, ofn = null, gp = null){
 		this.cM = cm;
 		this.files = file_path_arr;
 		this.cM_threshold = parseFloat(cm_str);
@@ -38,6 +38,7 @@ class MhmDNAs {
 		this.timestamp = Date.now();
 		this.id = crypto.randomBytes(20).toString('hex');
 		this.origfn = ofn;
+		this.group = gp;
 	}
 	
 	doit(){ 
@@ -54,20 +55,35 @@ class MhmDNAs {
 
 		let data = {};
 		let backbonedData = {};
+		let zeroFilledData = {};
 		let overlappedData = [];
-		let summary = {args: {cM_threshold: this.cM_threshold, minimum_snps: this.minimum_snps, files: (this.origfn ? this.origfn : this.files).map(fn => path.basename(fn))}, table: []};
+		let summary = {args: {cM_threshold: this.cM_threshold, minimum_snps: this.minimum_snps, files: (this.origfn ? this.origfn : this.files).map(fn => path.basename(fn))}, group: this.group, table: []};
 
 		this.file_content[0].table.forEach((item) => {
 			backbonedData[item.RSID] = item;
+		});
+		
+		this.file_content[0].table.forEach((item) => {
+			let clone = JSON.parse(JSON.stringify(item));
+			clone.RESULT = '--';
+			zeroFilledData[item.RSID] = clone;
 		});
 
 		for(let i = 0; i < this.files.length; i++){
 			for(let j = i + 1; j < this.files.length; j++){
 				console.log("Processing " + this.files[i] + " ∩ " + this.files[j]);
+				if(this.group){
+					if(this.group[i] == this.group[j]){
+						console.log("Skip for same group");
+						summary.table.push({source: path.basename((this.origfn ? this.origfn : this.files)[i]) + " ∩ " + path.basename((this.origfn ? this.origfn : this.files)[j]), isSkiped: true, summary: null});
+						continue;
+					}
+				}
 				let result = this.mergeIntersection(this.file_content[i], this.file_content[j]);
-				summary.table.push({source: path.basename((this.origfn ? this.origfn : this.files)[i]) + " ∩ " + path.basename((this.origfn ? this.origfn : this.files)[j]), summary: result.summary});
+				summary.table.push({source: path.basename((this.origfn ? this.origfn : this.files)[i]) + " ∩ " + path.basename((this.origfn ? this.origfn : this.files)[j]), isSkiped: false, summary: result.summary});
 				Object.assign(data, result.data);
 				Object.assign(backbonedData, result.data);
+				Object.assign(zeroFilledData, result.data);
 				overlappedData = overlappedData.concat(Object.values(result.data));
 			}
 		}
@@ -80,9 +96,13 @@ class MhmDNAs {
 		let arr2 = Object.values(backbonedData).sort((a, b) => {
 			return a.CHROMOSOME == b.CHROMOSOME ? a.POSITION - b.POSITION : a.CHROMOSOME - b.CHROMOSOME;
 		});
+		let arr3 = Object.values(zeroFilledData).sort((a, b) => {
+			return a.CHROMOSOME == b.CHROMOSOME ? a.POSITION - b.POSITION : a.CHROMOSOME - b.CHROMOSOME;
+		});
 
 		fs.writeFileSync(this.output_prefix + "-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr, {header: true}));
 		fs.writeFileSync(this.output_prefix + "-backboned-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr2, {header: true}));
+		fs.writeFileSync(this.output_prefix + "-zerofilled-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr3, {header: true}));
 		fs.writeFileSync(this.output_prefix + "-overlapped-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(overlappedData, {header: true}));
 		fs.writeFileSync(this.output_prefix + "-summary-" + this.timestamp + ".json", JSON.stringify(summary, null, 2));
 
@@ -235,7 +255,8 @@ class MhmDNAs {
 }
 
 process.on("message", function (msg){
-	console.log(new MhmDNAs(cM, msg.files, msg.mincm, msg.minsnp, msg.id, msg.origfn).processing());
+	console.log(msg);
+	console.log(new MhmDNAs(cM, msg.files, msg.mincm, msg.minsnp, msg.id, msg.origfn, msg.group).processing());
 	process.send("done");
 	process.exit(1);
 });

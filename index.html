@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>
+		mhmDNAs
+	</title>
+</head>
+<body>
+	<form action="fileupload" method="post" enctype="multipart/form-data">
+	<div>Minimum cM: <input type="text" name="mincm" value="2.5" /></div>
+	<div>Minimum SNPs: <input type="text" name="minsnp" value="50" /></div>
+	<div><button type="button" onclick="add()" style="width: 100%; height: 25%; font-size: 48px;">Add group</button><div>
+	<div id = "files">
+		<div>Select multiple CSVs for group 0 :<input type="file" name="filetoupload0" multiple="multiple"></div>
+	</div>
+	<div><button type="submit" style="width: 100%; height: 25%; font-size: 48px;">Submit</button><div>
+	</form>
+	
+	<script>
+	function add(){
+		let parent = document.getElementById("files");
+		let newEle = document.createElement("div");
+		newEle.innerHTML = 'Select multiple CSVs for group ' + parent.childElementCount + ' :<input type="file" name="filetoupload' + parent.childElementCount + '" multiple="multiple">';
+		parent.appendChild(newEle);
+	}
+	</script>
+</body>
+<html>
