@@ -59,6 +59,8 @@ class MhmDNAs {
 		let overlappedData = [];
 		let summary = {args: {cM_threshold: this.cM_threshold, minimum_snps: this.minimum_snps, files: (this.origfn ? this.origfn : this.files).map(fn => path.basename(fn))}, group: this.group, table: []};
 
+		let stats = {};
+		
 		this.file_content[0].table.forEach((item) => {
 			backbonedData[item.RSID] = item;
 		});
@@ -68,6 +70,8 @@ class MhmDNAs {
 			clone.RESULT = '--';
 			zeroFilledData[item.RSID] = clone;
 		});
+		
+		let zeroFilledStatsData = JSON.parse(JSON.stringify(zeroFilledData));
 
 		for(let i = 0; i < this.files.length; i++){
 			for(let j = i + 1; j < this.files.length; j++){
@@ -85,10 +89,18 @@ class MhmDNAs {
 				Object.assign(backbonedData, result.data);
 				Object.assign(zeroFilledData, result.data);
 				overlappedData = overlappedData.concat(Object.values(result.data));
+				stats = this.mergeStats(stats, result.stats);
 			}
 		}
 
 		console.log("Packing Final Result");
+		
+		Object.keys(stats).forEach((rsid) => {
+			if(!zeroFilledStatsData[rsid]){
+				zeroFilledStatsData[rsid] = {RSID: stats[rsid].RSID, CHROMOSOME: stats[rsid].CHROMOSOME, POSITION: stats[rsid].POSITION}
+			}
+			zeroFilledStatsData[rsid].RESULT = this.statsToPair(stats, rsid);
+		});
 
 		let arr = Object.values(data).sort((a, b) => {
 			return a.CHROMOSOME == b.CHROMOSOME ? a.POSITION - b.POSITION : a.CHROMOSOME - b.CHROMOSOME;
@@ -99,12 +111,19 @@ class MhmDNAs {
 		let arr3 = Object.values(zeroFilledData).sort((a, b) => {
 			return a.CHROMOSOME == b.CHROMOSOME ? a.POSITION - b.POSITION : a.CHROMOSOME - b.CHROMOSOME;
 		});
+		let arr4 = Object.values(zeroFilledStatsData).sort((a, b) => {
+			return a.CHROMOSOME == b.CHROMOSOME ? a.POSITION - b.POSITION : a.CHROMOSOME - b.CHROMOSOME;
+		});
 
 		fs.writeFileSync(this.output_prefix + "-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr, {header: true}));
 		fs.writeFileSync(this.output_prefix + "-backboned-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr2, {header: true}));
 		fs.writeFileSync(this.output_prefix + "-zerofilled-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr3, {header: true}));
 		fs.writeFileSync(this.output_prefix + "-overlapped-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(overlappedData, {header: true}));
+		fs.writeFileSync(this.output_prefix + "-statistical-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr4, {header: true}));
 		fs.writeFileSync(this.output_prefix + "-summary-" + this.timestamp + ".json", JSON.stringify(summary, null, 2));
+		
+		
+		fs.writeFileSync(this.output_prefix + "-statistical-hybrid-output-" + this.timestamp + ".json", JSON.stringify(stats, null, 2));
 
 	}
 
@@ -224,6 +243,7 @@ class MhmDNAs {
 			}
 		})
 		let result = {};
+		let stats = {};
 		console.log("Extracting");
 		let cursor = 0;
 		toCM.forEach((range) => {
@@ -233,6 +253,8 @@ class MhmDNAs {
 				if(aSNP.chromosome == range.chr && aSNP.pos >= range.start && aSNP.pos <= range.end){
 					result[aSNP.rsid] = {RSID: aSNP.rsid, CHROMOSOME: aSNP.chromosome.toString(), POSITION: aSNP.pos.toString(), RESULT: aSNP.result};
 					flag = true;
+					stats = this.addStats(stats, aSNP.rsid, a.rsidmap[aSNP.rsid]);
+					stats = this.addStats(stats, aSNP.rsid, b.rsidmap[aSNP.rsid]);
 				}else{
 					if(flag){
 						break;
@@ -250,9 +272,75 @@ class MhmDNAs {
 			});
 		});*/
 		console.log("Done");
-		return {summary: toCM, data: result};
+		return {summary: toCM, data: result, stats: stats};
+	}
+	
+	addStats(stats, rsid, obj){
+		let output = stats;
+		if(obj){
+			if(!output[rsid]){
+				output[rsid] = {RSID: obj.rsid, CHROMOSOME: obj.chromosome.toString(), POSITION: obj.pos.toString(), data: {posA: {A: 0, T: 0, G: 0, C: 0, '-': 0}, posB: {A: 0, T: 0, G: 0, C: 0, '-': 0}}};
+			}
+			let gene = obj.result.split("").sort();
+			output[rsid].data.posA[gene[0]]++;
+			output[rsid].data.posB[gene[1]]++;
+		}
+		return output;
+	}
+	
+	mergeStats(a, b){
+		let output = a;
+		Object.keys(b).forEach((key) => {
+			if(!output[key]){
+				output[key] = b[key];
+			}else{
+				Object.keys(output[key].data).forEach((pos) => {
+					Object.keys(output[key].data[pos]).forEach((value) => {
+						output[key].data[pos][value] += b[key].data[pos][value];
+					});
+				});
+			}
+		});
+		return output;
+	}
+	
+	statsToPairOld(stats, rsid){
+		let output = "";
+		Object.keys(stats[rsid].data).forEach((pos) => {
+			let max = 0;
+			let result = '-';
+			Object.keys(stats[rsid].data[pos]).sort().forEach((value) => {
+				let curr = stats[rsid].data[pos][value];
+				if(curr >= max){
+					max = curr;
+					result = value;
+				}
+			});
+			output += result;
+		});
+		return output;
+	}
+	
+	statsToPair(stats, rsid){
+		let output = "";
+		let posA = Object.keys(stats[rsid].data.posA).sort((a, b) => {
+			return stats[rsid].data.posA[b] - stats[rsid].data.posA[a];
+		});
+		let posB = Object.keys(stats[rsid].data.posB).sort((a, b) => {
+			return stats[rsid].data.posB[b] - stats[rsid].data.posB[a];
+		});
+		
+		if(posA[0] == '-' && posB[0] != '-'){
+			output = posA[1] + posB[0];
+		}else if(posA[0] != '-' && posB[0] == '-'){
+			output = posA[0] + posB[1];
+		}else{
+			output = posA[0] + posB[0];
+		}
+		return output;
 	}
 }
+
 
 process.on("message", function (msg){
 	console.log(msg);
