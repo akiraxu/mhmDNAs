@@ -4,6 +4,7 @@ var fs = require("fs");
 var path = require('path');
 var crypto = require("crypto");
 var fork = require("child_process");
+var JsonStreamStringify = require('json-stream-stringify')
 
 /*
 if(process.argv.length < 7){
@@ -76,7 +77,7 @@ class MhmDNAs {
 		for(let i = 0; i < this.files.length; i++){
 			for(let j = i + 1; j < this.files.length; j++){
 				console.log("Processing " + this.files[i] + " ∩ " + this.files[j]);
-				if(this.group){
+				if(this.group && (new Set(this.group)).size > 1){
 					if(this.group[i] == this.group[j]){
 						console.log("Skip for same group");
 						summary.table.push({source: path.basename((this.origfn ? this.origfn : this.files)[i]) + " ∩ " + path.basename((this.origfn ? this.origfn : this.files)[j]), isSkiped: true, summary: null});
@@ -114,17 +115,38 @@ class MhmDNAs {
 		let arr4 = Object.values(zeroFilledStatsData).sort((a, b) => {
 			return a.CHROMOSOME == b.CHROMOSOME ? a.POSITION - b.POSITION : a.CHROMOSOME - b.CHROMOSOME;
 		});
-
+		
+		fs.writeFileSync(this.output_prefix + "-summary-" + this.timestamp + ".json", JSON.stringify(summary, null, 2));
+		
+		let aStream = this.writeLargeJson(
+			this.output_prefix + "-raw-output-" + this.timestamp + ".json",
+			{
+				//hybrid: data,
+				//backboned: backbonedData,
+				//zerofilled: zeroFilledData,
+				//overlapped: overlappedData,
+				//statistical: zeroFilledStatsData,
+				stats: stats
+			}
+		);
+		aStream.on('end', function(){
+			console.log("Done writing stream");
+			process.exit(1);
+		});
+		
+		fs.writeFileSync(this.output_prefix + "-statistical-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr4, {header: true}));
 		fs.writeFileSync(this.output_prefix + "-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr, {header: true}));
 		fs.writeFileSync(this.output_prefix + "-backboned-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr2, {header: true}));
 		fs.writeFileSync(this.output_prefix + "-zerofilled-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr3, {header: true}));
-		fs.writeFileSync(this.output_prefix + "-overlapped-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(overlappedData, {header: true}));
-		fs.writeFileSync(this.output_prefix + "-statistical-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(arr4, {header: true}));
-		fs.writeFileSync(this.output_prefix + "-summary-" + this.timestamp + ".json", JSON.stringify(summary, null, 2));
+		//fs.writeFileSync(this.output_prefix + "-overlapped-hybrid-output-" + this.timestamp + ".csv", stringifier.stringify(overlappedData, {header: true}));
 		
-		
-		fs.writeFileSync(this.output_prefix + "-statistical-hybrid-output-" + this.timestamp + ".json", JSON.stringify(stats, null, 2));
-
+	}
+	
+	writeLargeJson(fn, obj){
+		let jsonStream = new JsonStreamStringify(obj, null, 2);
+		let outputStream = fs.createWriteStream(fn);
+		jsonStream.pipe( outputStream );
+		return jsonStream;
 	}
 
 	searchGRCh34Pos(chr, pos, i = -1, j = -2){
@@ -322,7 +344,7 @@ class MhmDNAs {
 	}
 	
 	statsToPair(stats, rsid){
-		let output = "";
+		let output = "rs13272288";
 		let posA = Object.keys(stats[rsid].data.posA).sort((a, b) => {
 			return stats[rsid].data.posA[b] - stats[rsid].data.posA[a];
 		});
@@ -346,7 +368,7 @@ process.on("message", function (msg){
 	console.log(msg);
 	console.log(new MhmDNAs(cM, msg.files, msg.mincm, msg.minsnp, msg.id, msg.origfn, msg.group).processing());
 	process.send("done");
-	process.exit(1);
+	//process.exit(1);
 });
 
 

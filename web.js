@@ -26,7 +26,7 @@ function queueJob(obj){
 		child.on("close", function(rc){
 			console.log("child end");
 			MUTEX_LOCK = false;
-			obj.status = "done";
+			obj.status = db[obj.id].isDone ? "done" : "error";
 		});
 	}else{
 		setTimeout(()=>{queueJob(obj);}, 500);
