@@ -10,6 +10,12 @@ var formOpt = {uploadDir: `${__dirname}/uploads`, maxFileSize: 1024 * 1024 * 102
 
 var db = JSON.parse(fs.readFileSync('db.json', {encoding: "utf8"}));
 
+var config = JSON.parse(fs.readFileSync('config.json', {encoding: "utf8"}));
+
+var twilioClient = require('twilio')(config.twilio.accountSid, config.twilio.authToken);
+var request = require('request');
+var querystring = require("querystring");
+
 http.createServer(server).listen(8080);
 
 function queueJob(obj){
@@ -22,6 +28,9 @@ function queueJob(obj){
 			console.log("child finish");
 			db[obj.id].isDone = true;
 			fs.writeFileSync("db.json", JSON.stringify(db, null, 2));
+			stnr('https://www.ybackmachine.com/' + obj.id, (url) => {
+				sendSMS(db[obj.id].phone, "Your Y-back Machine job " + obj.id + " is done at: " + url);
+			});
 		});
 		child.on("close", function(rc){
 			console.log("child end");
@@ -71,9 +80,12 @@ function server(req, res) {
 				isDone: false,
 				mincm: fields.mincm,
 				minsnp: fields.minsnp,
+				phone: fields.phone,
 				files: file_path_arr,
 				origfn: file_orig_name_arr,
 				group: file_group,
+				diploid: fields.diploid == "on",
+				unify: fields.unify == "on",
 				status: "queued"
 			};
 			db[obj.id] = obj;
@@ -118,4 +130,23 @@ function server(req, res) {
 	res.write(fs.readFileSync('index.html'));
 	res.end();
   }
+}
+
+function stnr(url, cb){
+	qstr = querystring.stringify({url: encodeURIComponent(Buffer.from(encodeURI(url)).toString('base64')), host: 'stnr.icu'});
+	requrl = 'https://stnr.icu/shortener?' + qstr;
+	request({url: requrl, method: "POST", body: qstr}, (err, res, body)=>{
+		cb(body.split("|")[0])
+	})
+}
+
+function sendSMS(number, msg){
+	if(!(/^([0-9]{10})$/).exec(number)){
+		return;
+	}
+	twilioClient.messages.create({
+		body: msg,
+		messagingServiceSid: config.twilio.messagingServiceSid,
+		to: number
+	}).then(message => console.log(message.sid)).done();
 }

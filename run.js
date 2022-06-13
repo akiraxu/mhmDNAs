@@ -29,7 +29,7 @@ for(let i = 1; i <= 22; i++){
 
 class MhmDNAs {
 
-	constructor(cm, file_path_arr, cm_str, snp_str, prefix, ofn = null, gp = null){
+	constructor(cm, file_path_arr, cm_str, snp_str, prefix, dip, uni, ofn = null, gp = null){
 		this.cM = cm;
 		this.files = file_path_arr;
 		this.cM_threshold = parseFloat(cm_str);
@@ -40,6 +40,8 @@ class MhmDNAs {
 		this.id = crypto.randomBytes(20).toString('hex');
 		this.origfn = ofn;
 		this.group = gp;
+		this.diploid = dip;
+		this.unify = uni;
 	}
 	
 	doit(){ 
@@ -91,6 +93,7 @@ class MhmDNAs {
 				Object.assign(zeroFilledData, result.data);
 				overlappedData = overlappedData.concat(Object.values(result.data));
 				stats = this.mergeStats(stats, result.stats);
+				global.gc();
 			}
 		}
 
@@ -303,7 +306,8 @@ class MhmDNAs {
 			if(!output[rsid]){
 				output[rsid] = {RSID: obj.rsid, CHROMOSOME: obj.chromosome.toString(), POSITION: obj.pos.toString(), data: {posA: {A: 0, T: 0, G: 0, C: 0, '-': 0}, posB: {A: 0, T: 0, G: 0, C: 0, '-': 0}}};
 			}
-			let gene = obj.result.split("").sort();
+			let gene = obj.result.split("");
+			gene = this.diploid ? gene : gene.sort();
 			output[rsid].data.posA[gene[0]]++;
 			output[rsid].data.posB[gene[1]]++;
 		}
@@ -343,6 +347,21 @@ class MhmDNAs {
 		return output;
 	}
 	
+	compairUnified(obj, x){
+		let result = 0;
+		[["A", "T"], ["G", "C"], ["-"]].forEach((p) => {
+			if(p.includes(x.toUpperCase())){
+				Object.keys(obj).forEach((k) => {
+					if(p.includes(k.toUpperCase())){
+						result += obj[k];
+					}
+				});
+			}
+		});
+		return result;
+	}
+	
+	
 	statsToPair(stats, rsid){
 		let output = "rs13272288";
 		let posA = Object.keys(stats[rsid].data.posA).sort((a, b) => {
@@ -351,6 +370,17 @@ class MhmDNAs {
 		let posB = Object.keys(stats[rsid].data.posB).sort((a, b) => {
 			return stats[rsid].data.posB[b] - stats[rsid].data.posB[a];
 		});
+		
+		if(this.unify){
+			posA = Object.keys(stats[rsid].data.posA).sort((a, b) => {
+				let x = this.compairUnified(stats[rsid].data.posA, b) - this.compairUnified(stats[rsid].data.posA, b);
+				return x == 0 ? stats[rsid].data.posA[b] - stats[rsid].data.posA[a] : x;
+			});
+			posB = Object.keys(stats[rsid].data.posB).sort((a, b) => {
+				let x = this.compairUnified(stats[rsid].data.posB, b) - this.compairUnified(stats[rsid].data.posB, b);
+				return x == 0 ? stats[rsid].data.posB[b] - stats[rsid].data.posB[a] : x;
+			});
+		}
 		
 		if(posA[0] == '-' && posB[0] != '-'){
 			output = posA[1] + posB[0];
@@ -366,7 +396,7 @@ class MhmDNAs {
 
 process.on("message", function (msg){
 	console.log(msg);
-	console.log(new MhmDNAs(cM, msg.files, msg.mincm, msg.minsnp, msg.id, msg.origfn, msg.group).processing());
+	console.log(new MhmDNAs(cM, msg.files, msg.mincm, msg.minsnp, msg.id, msg.diploid, msg.unify, msg.origfn, msg.group).processing());
 	process.send("done");
 	//process.exit(1);
 });
