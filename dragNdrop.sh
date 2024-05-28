@@ -1,5 +1,7 @@
 #!/bin/bash 
 
+export NODE_OPTIONS=--max-old-space-size=32768
+
 cd `dirname "$0"`
 echo "What's the threshold for ignore? (in cM)"
 read cM

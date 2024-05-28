@@ -11,8 +11,14 @@ var formOpt = {uploadDir: `${__dirname}/uploads`, maxFileSize: 1024 * 1024 * 102
 var db = JSON.parse(fs.readFileSync('db.json', {encoding: "utf8"}));
 
 var config = JSON.parse(fs.readFileSync('config.json', {encoding: "utf8"}));
+var twilioClient = undefined
+if(config?.twilio?.authToken){
+	console.log("load twilio");
+	twilioClient = require('twilio')(config.twilio.accountSid, config.twilio.authToken);
+}else{
+	console.log("skip twilio")
+}
 
-var twilioClient = require('twilio')(config.twilio.accountSid, config.twilio.authToken);
 var request = require('request');
 var querystring = require("querystring");
 
@@ -141,6 +147,9 @@ function stnr(url, cb){
 }
 
 function sendSMS(number, msg){
+	if(!twilioClient){
+		return
+	}
 	if(!(/^([0-9]{10})$/).exec(number)){
 		return;
 	}

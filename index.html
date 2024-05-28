@@ -9,6 +9,9 @@
 	<form action="fileupload" method="post" enctype="multipart/form-data">
 	<div>Minimum cM: <input type="text" name="mincm" value="2.5" /></div>
 	<div>Minimum SNPs: <input type="text" name="minsnp" value="50" /></div>
+	<div>Keep diploid order (for statistical): <input type="checkbox" name="diploid" /></div>
+	<div>Unify A/T->A G/C->G (for statistical): <input type="checkbox" name="unify" /></div>
+	<div>US/CA phone for SMS notification: <input type="text" name="phone" value="" /></div>
 	<div><button type="button" onclick="add()" style="width: 100%; height: 25%; font-size: 48px;">Add group</button><div>
 	<div id = "files">
 		<div>Select multiple CSVs for group 0 :<input type="file" name="filetoupload0" multiple="multiple"></div>
